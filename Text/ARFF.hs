@@ -43,11 +43,6 @@ isInlineSpace c = Char.isSpace c && c /= '\n' && c /= '\r'
 lineSpace :: Parser ()
 lineSpace = skipWhile isInlineSpace
 
--- | Arguments to '@' directives, e.g. @RELATION foo. 
--- TODO: Check these rules against the spec!
-identifier :: Parser BS.ByteString
-identifier = takeWhile Char.isAlphaNum
-
 -- Matches ignored data, e.g. comments up to end of line
 comment :: Parser ()
 comment = char '%' >> skipWhile (not . Text.isEndOfLine)
@@ -56,21 +51,28 @@ comment = char '%' >> skipWhile (not . Text.isEndOfLine)
 lineEnd :: Parser()
 lineEnd = lineSpace >> (comment >> endOfLine) <|> endOfLine
 
+-- | Arguments to '@' directives, e.g. @RELATION foo. 
+-- TODO: Check these rules against the spec!
+identifier :: Parser BS.ByteString
+identifier = takeWhile Char.isAlphaNum
+
+-- | Parse the title of the relation
 relation :: Parser BS.ByteString
-relation = char '@' >> stringCI "relation" >> lineSpace >>
-           identifier `before` lineEnd
+relation = char '@' >> stringCI "relation" >> lineSpace >> identifier
 
 -- | Parse the attribute type: @ATTRIBUTE <name> <type>
+-- TODO: Fix parsing of Nominal attribute names.
 attributeType :: Parser AttributeType
 attributeType = (stringCI "numeric" >> return Numeric)
                 <|> (stringCI "real" >> return Numeric)
                 <|> (nominal >>= return . Nominal . Set.fromList)
+                <?> "Attribute Type"
   where nominal = do
-          char '{'
-          xs <- (takeWhile $ (not . isSep)) `sepBy` (char ',')
+          char '{' >> lineSpace
+          xs <- (takeWhile $ (not . isSep)) `sepBy` (lineSpace >> char ',' >> lineSpace)
           char '}'
           return xs
-        isSep c = c == '{' || c == ',' || c == '}' -- Advised not to use InClass
+        isSep c = c == '{' || c == ',' || c == '}' || Text.isEndOfLine c
 
 -- | Parse an attribute: @ATTRIBUTE <Name> <Type>
 attribute :: Parser Attribute
@@ -78,3 +80,15 @@ attribute = do char '@' >> stringCI "attribute" >> lineSpace
                i <- identifier `before` lineSpace
                t <- attributeType `before` lineEnd
                return $ Attribute i t
+            <?> "Attribute"
+
+-- | Parses the next expected line
+line :: Parser p -> Parser p
+line p' = skipMany lineEnd >> lineSpace >> p' `before` lineEnd
+
+header :: Parser Header
+header = do
+  t <- line relation
+  as <- many1 $ line attribute
+  line $ stringCI "@data" >> lineEnd -- Match last before data
+  return $ Header t as
