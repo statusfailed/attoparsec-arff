@@ -53,8 +53,9 @@ lineEnd = lineSpace >> (comment >> endOfLine) <|> endOfLine
 
 -- | Arguments to '@' directives, e.g. @RELATION foo. 
 -- TODO: Check these rules against the spec!
+-- TODO: Allow quoted identifiers with spaces inside.
 identifier :: Parser BS.ByteString
-identifier = takeWhile Char.isAlphaNum
+identifier = takeWhile (\x -> Char.isAlphaNum x || x == '-')
 
 -- | Parse the title of the relation
 relation :: Parser BS.ByteString
@@ -69,16 +70,15 @@ attributeType = (stringCI "numeric" >> return Numeric)
                 <?> "Attribute Type"
   where nominal = do
           char '{' >> lineSpace
-          xs <- (takeWhile $ (not . isSep)) `sepBy` (lineSpace >> char ',' >> lineSpace)
-          char '}'
+          xs <- identifier `sepBy` (lineSpace >> char ',' >> lineSpace)
+          lineSpace >> char '}'
           return xs
-        isSep c = c == '{' || c == ',' || c == '}' || Text.isEndOfLine c
 
 -- | Parse an attribute: @ATTRIBUTE <Name> <Type>
 attribute :: Parser Attribute
 attribute = do char '@' >> stringCI "attribute" >> lineSpace
                i <- identifier `before` lineSpace
-               t <- attributeType `before` lineEnd
+               t <- attributeType
                return $ Attribute i t
             <?> "Attribute"
 
@@ -89,6 +89,5 @@ line p' = skipMany lineEnd >> lineSpace >> p' `before` lineEnd
 header :: Parser Header
 header = do
   t <- line relation
-  as <- many1 $ line attribute
-  line $ stringCI "@data" >> lineEnd -- Match last before data
+  as <- manyTill (line attribute) (line $ stringCI "@data")
   return $ Header t as
