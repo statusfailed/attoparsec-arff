@@ -1,5 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ARFF where
+{-
+  ( identifier
+  , comment
+  , relation
+  , attributeType
+  , attribute
+  , header
+  ) where
+-}
+
+-- TODO:
+-- * Fix haddock comments!
+-- * Re-do exports.
 
 import Prelude hiding (takeWhile)
 import Control.Monad
@@ -25,8 +38,10 @@ data Attribute = Attribute
   } deriving (Show)
 
 data Header = Header
-  { title :: BS.ByteString -- Name of the relation (@RELATION foo)
-  , attributes :: [Attribute] -- Mapping of indexes to values
+  { title :: BS.ByteString
+  -- ^ Name of the relation (\@RELATION foo)
+  , attributes :: [Attribute]
+  -- ^ Mapping of indexes to values
   } deriving (Show)
 
 -- | Parse two expressions sequentially, returning the result of the first.
@@ -51,7 +66,7 @@ comment = char '%' >> skipWhile (not . Text.isEndOfLine)
 lineEnd :: Parser()
 lineEnd = lineSpace >> (comment >> endOfLine) <|> endOfLine
 
--- | Arguments to '@' directives, e.g. @RELATION foo. 
+-- | @identifier@ parses arguments to '\@' directives, e.g. "\@RELATION foo" 
 -- TODO: Check these rules against the spec!
 -- TODO: Allow quoted identifiers with spaces inside.
 identifier :: Parser BS.ByteString
@@ -61,7 +76,7 @@ identifier = takeWhile (\x -> Char.isAlphaNum x || x == '-')
 relation :: Parser BS.ByteString
 relation = char '@' >> stringCI "relation" >> lineSpace >> identifier
 
--- | Parse the attribute type: @ATTRIBUTE <name> <type>
+-- | Parse the attribute type: \@ATTRIBUTE <name> <type>
 -- TODO: Fix parsing of Nominal attribute names.
 attributeType :: Parser AttributeType
 attributeType = (stringCI "numeric" >> return Numeric)
@@ -74,7 +89,7 @@ attributeType = (stringCI "numeric" >> return Numeric)
           lineSpace >> char '}'
           return xs
 
--- | Parse an attribute: @ATTRIBUTE <Name> <Type>
+-- | Parse an attribute: \@ATTRIBUTE <Name> <Type>
 attribute :: Parser Attribute
 attribute = do char '@' >> stringCI "attribute" >> lineSpace
                i <- identifier `before` lineSpace
@@ -86,6 +101,7 @@ attribute = do char '@' >> stringCI "attribute" >> lineSpace
 line :: Parser p -> Parser p
 line p' = skipMany lineEnd >> lineSpace >> p' `before` lineEnd
 
+-- | Parse an ARFF header.
 header :: Parser Header
 header = do
   t <- line relation
