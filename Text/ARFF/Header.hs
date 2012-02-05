@@ -1,8 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Header where
+module ARFF where
+{-
+  ( identifier
+  , comment
+  , relation
+  , attributeType
+  , attribute
+  , header
+  ) where
+-}
 
 -- TODO:
 -- * Fix haddock comments!
+-- * Re-do exports.
 
 import Prelude hiding (takeWhile)
 import Control.Monad
@@ -24,9 +34,7 @@ data AttributeType = Numeric | Nominal (Set.Set BS.ByteString) | String deriving
 -- Represents header metadata
 data Attribute = Attribute
   { name :: BS.ByteString
-    -- ^ Name of the attribute
   , dataType :: AttributeType
-    -- ^ Type of the attribute. Dates not yet supported.
   } deriving (Show)
 
 data Header = Header
