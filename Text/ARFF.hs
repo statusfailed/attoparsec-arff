@@ -19,6 +19,7 @@ import Control.Monad
 import Control.Applicative
 import Data.Map as Map
 import Data.Set as Set
+import Data.Maybe
 
 -- ByteStrings up in hurr
 import qualified Data.ByteString as BS
@@ -29,20 +30,34 @@ import Data.Attoparsec.Combinator
 import Data.Attoparsec.ByteString.Char8
 import qualified Data.Attoparsec.Text as Text
 
-data AttributeType = Numeric | Nominal (Set.Set BS.ByteString) | String deriving(Show)
+data AttributeType = Numeric | Nominal [BS.ByteString] | String deriving(Show)
 
--- Represents header metadata
+-- Represents metadata for a single attribute
 data Attribute = Attribute
   { name :: BS.ByteString
   , dataType :: AttributeType
   } deriving (Show)
 
+-- | Represents the entire header
 data Header = Header
   { title :: BS.ByteString
   -- ^ Name of the relation (\@RELATION foo)
   , attributes :: [Attribute]
   -- ^ Mapping of indexes to values
   } deriving (Show)
+
+-- | Value of a single attribute in a single row
+data AttributeValue = NumericValue (Maybe Double) |
+                 NominalValue (Maybe BS.ByteString) |
+                 StringValue (Maybe String)
+
+showAttributeValue :: AttributeValue -> String
+showAttributeValue (NumericValue x) = show x
+showAttributeValue (NominalValue x) = show x
+showAttributeValue (StringValue x) = show x
+
+instance Show AttributeValue where
+  show = showAttributeValue
 
 -- | Parse two expressions sequentially, returning the result of the first.
 before :: Parser p1 -> Parser p2 -> Parser p1
@@ -81,7 +96,7 @@ relation = char '@' >> stringCI "relation" >> lineSpace >> identifier
 attributeType :: Parser AttributeType
 attributeType = (stringCI "numeric" >> return Numeric)
                 <|> (stringCI "real" >> return Numeric)
-                <|> (nominal >>= return . Nominal . Set.fromList)
+                <|> (nominal >>= return . Nominal)
                 <?> "Attribute Type"
   where nominal = do
           char '{' >> lineSpace
@@ -107,3 +122,19 @@ header = do
   t <- line relation
   as <- manyTill (line attribute) (line $ stringCI "@data")
   return $ Header t as
+
+-- | Parse a value of the expected type
+--value :: AttributeType -> Parser AttributeValue
+--value (Nominal xs) = choice $ Prelude.map string (Set.toList xs)
+--foo = ["a", "b", "c"] :: [BS.ByteString]
+--bar = Prelude.map string foo
+value (Nominal xs) = ((choice $ Prelude.map string xs) >>= return . NominalValue . Just)
+                     <|> (char '?' >> return (NominalValue Nothing))
+                     <?> "Expected one of " ++ (concat $ Prelude.map show xs)
+--                     <|>  return  . NominalValue Nothing
+
+-- | Create a parser which parses a single row of AttributeValues, expecting
+-- each to be in order of the Attributes supplied.
+--row :: [Attribute] ->
+--       Parser [AttributeValue]
+--row = foldl (>>) $ map valueParser [Attribute]
