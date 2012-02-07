@@ -17,9 +17,8 @@ module ARFF where
 import Prelude hiding (takeWhile)
 import Control.Monad
 import Control.Applicative
-import Data.Map as Map
-import Data.Set as Set
 import Data.Maybe
+import Data.List hiding(takeWhile)
 
 -- ByteStrings up in hurr
 import qualified Data.ByteString as BS
@@ -47,9 +46,9 @@ data Header = Header
   } deriving (Show)
 
 -- | Value of a single attribute in a single row
-data AttributeValue = NumericValue (Maybe Double) |
-                 NominalValue (Maybe BS.ByteString) |
-                 StringValue (Maybe String)
+data AttributeValue = NumericValue Double |
+                 NominalValue BS.ByteString |
+                 StringValue BS.ByteString
 
 showAttributeValue :: AttributeValue -> String
 showAttributeValue (NumericValue x) = show x
@@ -79,7 +78,7 @@ comment = char '%' >> skipWhile (not . Text.isEndOfLine)
 
 -- | Matches what should be the end of the line- optional comment then newline.
 lineEnd :: Parser()
-lineEnd = lineSpace >> (comment >> endOfLine) <|> endOfLine
+lineEnd = lineSpace >> (comment >> endOfLine) <|> (endOfLine <|> endOfInput)
 
 -- | @identifier@ parses arguments to '\@' directives, e.g. "\@RELATION foo" 
 -- TODO: Check these rules against the spec!
@@ -115,6 +114,12 @@ attribute = do char '@' >> stringCI "attribute" >> lineSpace
 -- | Parses the next expected line
 line :: Parser p -> Parser p
 line p' = skipMany lineEnd >> lineSpace >> p' `before` lineEnd
+{-
+line :: Parser p -> Parser p
+line p = do 
+  takeTill (not . isLineSpace)
+  lineEnd <|> comment <|> p <|> 
+-}
 
 -- | Parse an ARFF header.
 header :: Parser Header
@@ -123,18 +128,38 @@ header = do
   as <- manyTill (line attribute) (line $ stringCI "@data")
   return $ Header t as
 
--- | Parse a value of the expected type
---value :: AttributeType -> Parser AttributeValue
---value (Nominal xs) = choice $ Prelude.map string (Set.toList xs)
---foo = ["a", "b", "c"] :: [BS.ByteString]
---bar = Prelude.map string foo
-value (Nominal xs) = ((choice $ Prelude.map string xs) >>= return . NominalValue . Just)
-                     <|> (char '?' >> return (NominalValue Nothing))
-                     <?> "Expected one of " ++ (concat $ Prelude.map show xs)
---                     <|>  return  . NominalValue Nothing
+-- | Parse a value of the expected type (not handling missings)
+value' :: AttributeType -> Parser AttributeValue
+value' (Nominal xs) = ((choice $ map string xs) >>= return . NominalValue)
+                     <?> "Expected one of " ++ tail (xs >>= (',':) . show)
+                     -- This last line displays a comma separated list of the
+                     -- possible values of the nominal.
+value' Numeric = liftM NumericValue double
+value' String = error "Not implemented yet... sorry!"
+
+-- | Parse a value of the expected type, returning Nothing for missing values
+value :: AttributeType -> Parser (Maybe AttributeValue)
+value a = (char '?' >> return Nothing) <|> liftM Just (value' a)
 
 -- | Create a parser which parses a single row of AttributeValues, expecting
 -- each to be in order of the Attributes supplied.
---row :: [Attribute] ->
---       Parser [AttributeValue]
---row = foldl (>>) $ map valueParser [Attribute]
+row :: [AttributeType] -> Parser [Maybe AttributeValue]
+row [] = error "Can't parse empty list" -- no attributes is an error.
+row (a:as) = sequence . (value a:) . map (sep >>) $ (map value as)
+  where sep = lineSpace >> char ',' >> lineSpace
+
+-- | Parse all data rows in the file.
+rows :: Header -> Parser [[Maybe AttributeValue]]
+rows header = do
+  let as = map dataType $ attributes header
+  let errMsg = "expected: " ++ (intercalate ", " $ map show as)
+  xs <- manyTill (line (row as) <?> errMsg) endOfInput
+  return xs
+
+-- | Parse a tuple of Header data and a list of rows, composed of values or
+-- "Nothing" (for missing- ?- values).
+arff :: Parser (Header, [[Maybe AttributeValue]])
+arff = do
+  h <- header
+  rs <- rows h
+  return (h, rs)
