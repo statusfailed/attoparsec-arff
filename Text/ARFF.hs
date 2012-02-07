@@ -78,7 +78,7 @@ comment = char '%' >> skipWhile (not . Text.isEndOfLine)
 
 -- | Matches what should be the end of the line- optional comment then newline.
 lineEnd :: Parser()
-lineEnd = lineSpace >> ((comment >> endOfLine) <|> endOfLine)
+lineEnd = lineSpace >> option () comment >> (endOfInput <|> endOfLine <?> "lineEnd")
 
 -- | @identifier@ parses arguments to '\@' directives, e.g. "\@RELATION foo" 
 -- TODO: Check these rules against the spec!
@@ -91,7 +91,6 @@ relation :: Parser BS.ByteString
 relation = char '@' >> stringCI "relation" >> lineSpace >> identifier
 
 -- | Parse the attribute type: \@ATTRIBUTE <name> <type>
--- TODO: Fix parsing of Nominal attribute names.
 attributeType :: Parser AttributeType
 attributeType = (stringCI "numeric" >> return Numeric)
                 <|> (stringCI "real" >> return Numeric)
@@ -113,7 +112,8 @@ attribute = do char '@' >> stringCI "attribute" >> lineSpace
 
 -- | Parses the next expected line
 line :: Parser p -> Parser p
-line p' = skipMany lineEnd >> lineSpace >> p' `before` (lineEnd <|> endOfInput)
+line p = skipMany lineEnd >> lineSpace >> p `before` lineEnd
+--line p' = skipMany lineEnd >> lineSpace >> p' `before` (lineEnd <|> endOfInput)
 --line p = do 
 --  takeTill (not . Char.isSpace) >> (comment >> line p `before` lineEnd)
 
@@ -148,8 +148,8 @@ row (a:as) = sequence . (value a:) . map (sep >>) $ (map value as)
 rows :: Header -> Parser [[Maybe AttributeValue]]
 rows header = do
   let as = map dataType $ attributes header
-  let errMsg = "expected: " ++ (intercalate ", " $ map show as)
-  xs <- manyTill (line (row as) <?> errMsg) (line endOfInput)
+  let errMsg = "expected row of types: " ++ (intercalate ", " $ map show as)
+  xs <- manyTill (line (row as) <?> errMsg) (manyTill lineEnd endOfInput)
   return xs
 
 -- | Parse a tuple of Header data and a list of rows, composed of values or
