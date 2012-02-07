@@ -78,7 +78,7 @@ comment = char '%' >> skipWhile (not . Text.isEndOfLine)
 
 -- | Matches what should be the end of the line- optional comment then newline.
 lineEnd :: Parser()
-lineEnd = lineSpace >> (comment >> endOfLine) <|> (endOfLine <|> endOfInput)
+lineEnd = lineSpace >> ((comment >> endOfLine) <|> endOfLine)
 
 -- | @identifier@ parses arguments to '\@' directives, e.g. "\@RELATION foo" 
 -- TODO: Check these rules against the spec!
@@ -113,13 +113,9 @@ attribute = do char '@' >> stringCI "attribute" >> lineSpace
 
 -- | Parses the next expected line
 line :: Parser p -> Parser p
-line p' = skipMany lineEnd >> lineSpace >> p' `before` lineEnd
-{-
-line :: Parser p -> Parser p
-line p = do 
-  takeTill (not . isLineSpace)
-  lineEnd <|> comment <|> p <|> 
--}
+line p' = skipMany lineEnd >> lineSpace >> p' `before` (lineEnd <|> endOfInput)
+--line p = do 
+--  takeTill (not . Char.isSpace) >> (comment >> line p `before` lineEnd)
 
 -- | Parse an ARFF header.
 header :: Parser Header
@@ -153,7 +149,7 @@ rows :: Header -> Parser [[Maybe AttributeValue]]
 rows header = do
   let as = map dataType $ attributes header
   let errMsg = "expected: " ++ (intercalate ", " $ map show as)
-  xs <- manyTill (line (row as) <?> errMsg) endOfInput
+  xs <- manyTill (line (row as) <?> errMsg) (line endOfInput)
   return xs
 
 -- | Parse a tuple of Header data and a list of rows, composed of values or
