@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ARFF where
+module Text.ARFF where
 {-
   ( identifier
   , comment
@@ -9,10 +9,6 @@ module ARFF where
   , header
   ) where
 -}
-
--- TODO:
--- * Fix haddock comments!
--- * Re-do exports.
 
 import Prelude hiding (takeWhile)
 import Control.Monad

@@ -9,6 +9,9 @@ A Haskell library for parsing ARFF files.
 
 ## TODO list
   
+  0. Use HLint and clean up code
   1. Testing
   2. Quoted identifiers
   3. Extra attribute types
+  4. Fix haddock comments
+  5. Re-do exports & hide some functions
