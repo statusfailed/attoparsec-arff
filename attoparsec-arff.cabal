@@ -7,11 +7,11 @@ License:             GPL-2
 License-file:        LICENSE
 Build-Type:          Simple
 Cabal-version:       >= 1.6
-Author:              statusfailed.com
-Maintainer:          statusfailed.com <sf@statusfailed.com>
+Author:              Paul Wilson
+Maintainer:          Paul Wilson <paul@statusfailed.com>
 
 Library
-  Build-Depends:     base, attoparsec >= 0.10.1.0, bytestring >= 0.9.1.10
+  Build-Depends:     base >= 4 && < 5, attoparsec >= 0.10.1.0, bytestring >= 0.9.1.10
   Hs-Source-Dirs:    src
   Exposed-modules:   Text.ARFF
 
