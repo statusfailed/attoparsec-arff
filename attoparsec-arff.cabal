@@ -1,5 +1,5 @@
 Name:                attoparsec-arff
-Version:             0.0
+Version:             0.0.1
 Synopsis:            An ARFF file parser using Attoparsec
 Description:         Parse ARFF files
 Category:            Data, Text, AI

@@ -90,7 +90,7 @@ relation = char '@' >> stringCI "relation" >> lineSpace >> identifier
 attributeType :: Parser AttributeType
 attributeType = (stringCI "numeric" >> return Numeric)
                 <|> (stringCI "real" >> return Numeric)
-                <|> (nominal >>= return . Nominal)
+                <|> liftM Nominal nominal
                 <?> "Attribute Type"
   where nominal = do
           char '{' >> lineSpace
@@ -122,7 +122,7 @@ header = do
 
 -- | Parse a value of the expected type (not handling missings)
 value' :: AttributeType -> Parser AttributeValue
-value' (Nominal xs) = ((choice $ map string xs) >>= return . NominalValue)
+value' (Nominal xs) = (liftM NominalValue . choice $ map string xs)
                      <?> "Expected one of " ++ tail (xs >>= (',':) . show)
                      -- This last line displays a comma separated list of the
                      -- possible values of the nominal.
@@ -137,16 +137,15 @@ value a = (char '?' >> return Nothing) <|> liftM Just (value' a)
 -- each to be in order of the Attributes supplied.
 row :: [AttributeType] -> Parser [Maybe AttributeValue]
 row [] = error "Can't parse empty list" -- no attributes is an error.
-row (a:as) = sequence . (value a:) . map (sep >>) $ (map value as)
+row (a:as) = sequence . (value a:) . map (sep >>) $ map value as
   where sep = lineSpace >> char ',' >> lineSpace
 
 -- | Parse all data rows in the file.
 rows :: Header -> Parser [[Maybe AttributeValue]]
 rows header = do
   let as = map dataType $ attributes header
-  let errMsg = "expected row of types: " ++ (intercalate ", " $ map show as)
-  xs <- manyTill (line (row as) <?> errMsg) (manyTill lineEnd endOfInput)
-  return xs
+  let errMsg = "expected row of types: " ++ intercalate ", " (map show as)
+  manyTill (line (row as) <?> errMsg) (manyTill lineEnd endOfInput)
 
 -- | Parse a tuple of Header data and a list of rows, composed of values or
 -- "Nothing" (for missing- ?- values).
